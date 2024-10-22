@@ -1,0 +1,234 @@
+﻿@model Lr6.Models.OrderViewModel
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Вибір піц - Замовлення піци</title>
+    <link rel="stylesheet" href="~/css/site.css" />
+    <style>
+        .pizza-selection {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .pizza-info {
+            margin-top: 10px;
+        }
+
+        .total-price {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            width: 70%;
+            border-radius: 5px;
+            position: relative;
+        }
+
+        .order-summary {
+            margin-top: 20px;
+        }
+
+        .divider {
+            border-top: 2px solid #ddd;
+            margin: 10px 0;
+        }
+
+        .close-modal {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .modal-buttons {
+            margin-top: 20px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Виберіть піци для замовлення</h2>
+        <form asp-action="ConfirmOrder" method="post" id="orderForm">
+            <input type="hidden" asp-for="PizzaCount" />
+
+            @for (int i = 0; i < Model.PizzaCount; i++)
+            {
+                <div class="pizza-selection">
+                    <h3>Замовлення @(i + 1)</h3>
+                    <input type="hidden" name="OrderItems[@i].OrderItemId" value="@(i + 1)" />
+                    <select name="OrderItems[@i].SelectedPizzaId"
+                            class="pizza-select form-control"
+                            data-order-item="@(i + 1)"
+                            required>
+                        <option value="">Виберіть піцу</option>
+                        @foreach (var pizza in ViewBag.Pizzas)
+                        {
+                            <option value="@pizza.Id"
+                                    data-price="@pizza.Price.ToString("F2")"
+                                    data-ingredients="@pizza.Ingredients"
+                                    data-name="@pizza.Name">
+                                @pizza.Name (@pizza.Price.ToString("F2") грн)
+                            </option>
+                        }
+                    </select>
+                    <div class="pizza-info" id="pizza-info-@(i + 1)"></div>
+                </div>
+            }
+
+            <div class="total-price">
+                Загальна вартість: <span id="total-price">0.00</span> грн
+            </div>
+
+            <button type="button" class="btn btn-primary" id="showSummaryBtn">Замовити</button>
+        </form>
+    </div>
+
+    <div id="orderModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <h3>Ваше замовлення</h3>
+            <div id="orderSummary"></div>
+            <div class="divider"></div>
+            <div id="orderTotal"></div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeModal()">
+                    Повернутися до замовлення
+                </button>
+                <button class="btn btn-primary" onclick="submitOrder()">
+                    Підтвердити замовлення
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script>
+        function formatPrice(price) {
+            return parseFloat(price).toFixed(2);
+        }
+
+        function updateTotalPrice() {
+            let total = 0;
+            $('.pizza-select').each(function () {
+                const selectedOption = $(this).find('option:selected');
+                const price = parseFloat(selectedOption.data('price')) || 0;
+                total += price;
+            });
+            $('#total-price').text(formatPrice(total));
+            return total;
+        }
+
+        function updatePizzaInfo(orderItem, selectedOption) {
+            const infoDiv = $(`#pizza-info-${orderItem}`);
+            if (selectedOption.val()) {
+                const ingredients = selectedOption.data('ingredients');
+                infoDiv.html(`<p>Інгредієнти: ${ingredients}</p>`);
+            } else {
+                infoDiv.empty();
+            }
+        }
+
+        function showOrderSummary() {
+            const pizzaCounts = {};
+            let isValid = true;
+
+            $('.pizza-select').each(function () {
+                if (!$(this).val()) {
+                    alert('Будь ласка, виберіть всі піци перед оформленням замовлення');
+                    isValid = false;
+                    return false;
+                }
+            });
+
+            if (!isValid) return;
+
+            $('.pizza-select').each(function () {
+                const selectedOption = $(this).find('option:selected');
+                const pizzaName = selectedOption.data('name');
+                const price = parseFloat(selectedOption.data('price'));
+                const ingredients = selectedOption.data('ingredients');
+
+                if (!pizzaCounts[pizzaName]) {
+                    pizzaCounts[pizzaName] = {
+                        count: 0,
+                        price: price,
+                        ingredients: ingredients
+                    };
+                }
+                pizzaCounts[pizzaName].count++;
+            });
+
+            let summaryHtml = '';
+            let total = 0;
+
+            for (const [name, info] of Object.entries(pizzaCounts)) {
+                const subtotal = info.price * info.count;
+                total += subtotal;
+                summaryHtml += `
+                            <div class="order-summary">
+                                <h4>${name} x${info.count}</h4>
+                                <p>Інгредієнти: ${info.ingredients}</p>
+                                <p>Ціна за одиницю: ${formatPrice(info.price)} грн</p>
+                                <p>Всього: ${formatPrice(subtotal)} грн</p>
+                            </div>
+                        `;
+            }
+
+            $('#orderSummary').html(summaryHtml);
+            $('#orderTotal').html(`<h4>Загальна вартість: ${formatPrice(total)} грн</h4>`);
+            $('#orderModal').show();
+        }
+
+        function closeModal() {
+            $('#orderModal').hide();
+        }
+
+        function submitOrder() {
+            $('#orderForm').submit();
+        }
+
+        $(document).ready(function () {
+            $('.pizza-select').change(function () {
+                const orderItem = $(this).data('order-item');
+                const selectedOption = $(this).find('option:selected');
+                updatePizzaInfo(orderItem, selectedOption);
+                updateTotalPrice();
+            });
+
+            $('#showSummaryBtn').click(function (e) {
+                e.preventDefault();
+                showOrderSummary();
+            });
+
+            $(window).click(function (e) {
+                if ($(e.target).is('.modal')) {
+                    closeModal();
+                }
+            });
+            updateTotalPrice();
+        });
+    </script>
+</body>
+</html>

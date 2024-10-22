@@ -1,0 +1,61 @@
+﻿@model Lr6.Models.OrderViewModel
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Підтвердження замовлення - Замовлення піци</title>
+    <link rel="stylesheet" href="~/css/site.css" />
+    <style>
+        .receipt {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .order-item {
+            margin: 10px 0;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .total {
+            margin-top: 20px;
+            font-weight: bold;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="receipt">
+            <h2>Ваше замовлення підтверджено</h2>
+            @{
+                var groupedPizzas = Model.OrderItems
+                .Where(item => item.SelectedPizza != null)
+                .GroupBy(item => item.SelectedPizza.Id)
+                .Select(group => new
+                {
+                    Pizza = group.First().SelectedPizza,
+                    Count = group.Count()
+                });
+            }
+
+            @foreach (var group in groupedPizzas)
+            {
+                <div class="order-item">
+                    <h3>@group.Pizza.Name x @group.Count</h3>
+                    <p>Інгредієнти: @group.Pizza.Ingredients</p>
+                    <p>Ціна за одиницю: @group.Pizza.Price грн</p>
+                    <p>Всього: @(group.Pizza.Price * group.Count) грн</p>
+                </div>
+            }
+
+            <div class="total">
+                <div class="divider"></div>
+                <p>Загальна вартість: @Model.TotalPrice грн</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
